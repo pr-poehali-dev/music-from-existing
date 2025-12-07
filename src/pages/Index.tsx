@@ -13,6 +13,15 @@ interface Track {
   muted: boolean;
   solo: boolean;
   color: string;
+  recording: boolean;
+  clips: Clip[];
+}
+
+interface Clip {
+  id: string;
+  start: number;
+  duration: number;
+  name: string;
 }
 
 interface Effect {
@@ -22,18 +31,33 @@ interface Effect {
   active: boolean;
 }
 
+interface Project {
+  id: string;
+  name: string;
+  date: string;
+  duration: string;
+}
+
 const Index = () => {
   const [tracks, setTracks] = useState<Track[]>([
-    { id: 1, name: 'Kick', volume: 75, pan: 50, muted: false, solo: false, color: '#0EA5E9' },
-    { id: 2, name: 'Snare', volume: 65, pan: 50, muted: false, solo: false, color: '#8B5CF6' },
-    { id: 3, name: 'Hi-Hat', volume: 55, pan: 60, muted: false, solo: false, color: '#F97316' },
-    { id: 4, name: 'Bass', volume: 80, pan: 50, muted: false, solo: false, color: '#0EA5E9' },
-    { id: 5, name: 'Synth', volume: 70, pan: 45, muted: false, solo: false, color: '#8B5CF6' },
-    { id: 6, name: 'Vocals', volume: 85, pan: 50, muted: false, solo: false, color: '#F97316' },
+    { id: 1, name: 'Kick', volume: 75, pan: 50, muted: false, solo: false, color: '#0EA5E9', recording: false, clips: [{ id: '1', start: 0, duration: 4, name: 'Kick 1' }] },
+    { id: 2, name: 'Snare', volume: 65, pan: 50, muted: false, solo: false, color: '#8B5CF6', recording: false, clips: [{ id: '2', start: 1, duration: 3, name: 'Snare 1' }] },
+    { id: 3, name: 'Hi-Hat', volume: 55, pan: 60, muted: false, solo: false, color: '#F97316', recording: false, clips: [{ id: '3', start: 0, duration: 8, name: 'Hi-Hat Loop' }] },
+    { id: 4, name: 'Bass', volume: 80, pan: 50, muted: false, solo: false, color: '#0EA5E9', recording: false, clips: [] },
+    { id: 5, name: 'Synth', volume: 70, pan: 45, muted: false, solo: false, color: '#8B5CF6', recording: false, clips: [] },
+    { id: 6, name: 'Vocals', volume: 85, pan: 50, muted: false, solo: false, color: '#F97316', recording: false, clips: [] },
   ]);
 
   const [masterVolume, setMasterVolume] = useState(80);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [projectName, setProjectName] = useState('Untitled Project');
+  const [savedProjects] = useState<Project[]>([
+    { id: '1', name: 'Summer Vibes', date: '2025-12-06', duration: '3:45' },
+    { id: '2', name: 'Dark Techno', date: '2025-12-05', duration: '5:12' },
+    { id: '3', name: 'Chill Beats', date: '2025-12-04', duration: '4:20' },
+  ]);
   const [effects, setEffects] = useState<Effect[]>([
     { id: 'eq', name: 'EQ', icon: 'SlidersHorizontal', active: true },
     { id: 'comp', name: 'Compressor', icon: 'Gauge', active: true },
@@ -49,6 +73,7 @@ const Index = () => {
     if (isPlaying) {
       const interval = setInterval(() => {
         setSpectrumBars(Array.from({ length: 32 }, () => Math.random() * 60 + 20));
+        setCurrentTime(prev => prev + 0.1);
       }, 100);
       return () => clearInterval(interval);
     }
@@ -76,6 +101,45 @@ const Index = () => {
 
   const togglePlayback = () => {
     setIsPlaying(!isPlaying);
+    if (isRecording) setIsRecording(false);
+  };
+
+  const toggleRecording = (trackId?: number) => {
+    if (trackId) {
+      setTracks(tracks.map(t => 
+        t.id === trackId ? { ...t, recording: !t.recording } : t
+      ));
+    } else {
+      setIsRecording(!isRecording);
+      if (!isRecording && !isPlaying) {
+        setIsPlaying(true);
+      }
+    }
+  };
+
+  const stopPlayback = () => {
+    setIsPlaying(false);
+    setIsRecording(false);
+    setCurrentTime(0);
+    setTracks(tracks.map(t => ({ ...t, recording: false })));
+  };
+
+  const saveProject = () => {
+    const projectData = {
+      name: projectName,
+      tracks,
+      effects,
+      masterVolume,
+      timestamp: new Date().toISOString()
+    };
+    localStorage.setItem('currentProject', JSON.stringify(projectData));
+    alert(`Project "${projectName}" saved successfully!`);
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -92,13 +156,28 @@ const Index = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="hover-scale">
-              <Icon name="FolderOpen" size={16} className="mr-2" />
-              Open
-            </Button>
-            <Button variant="outline" size="sm" className="hover-scale">
+            <div className="text-sm text-muted-foreground mr-4">
+              <span className="font-mono">{formatTime(currentTime)}</span> / 8:00
+            </div>
+            <Button variant="outline" size="sm" className="hover-scale" onClick={saveProject}>
               <Icon name="Save" size={16} className="mr-2" />
               Save
+            </Button>
+            <Button 
+              size="sm" 
+              variant="outline"
+              className="hover-scale"
+              onClick={stopPlayback}
+            >
+              <Icon name="Square" size={16} />
+            </Button>
+            <Button 
+              size="sm" 
+              className={`transition-all duration-300 ${isRecording ? 'bg-accent animate-pulse' : 'bg-destructive hover-scale'}`}
+              onClick={() => toggleRecording()}
+            >
+              <Icon name="Circle" size={16} className="mr-2" />
+              {isRecording ? 'Recording' : 'Record'}
             </Button>
             <Button 
               size="sm" 
@@ -110,6 +189,73 @@ const Index = () => {
             </Button>
           </div>
         </header>
+
+        <Card className="p-4 bg-card border-border">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold flex items-center gap-2">
+              <Icon name="Clock" size={16} />
+              Timeline
+            </h2>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="h-7 text-xs">
+                <Icon name="ZoomIn" size={14} />
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs">
+                <Icon name="ZoomOut" size={14} />
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {tracks.map((track) => (
+              <div key={track.id} className="flex items-center gap-2 group">
+                <div className="w-20 text-xs truncate" style={{ color: track.color }}>
+                  {track.name}
+                </div>
+                <div className="flex-1 h-8 bg-muted/30 rounded relative border border-border">
+                  <div 
+                    className="absolute top-0 left-0 h-full w-1 bg-primary transition-all duration-100"
+                    style={{ left: `${(currentTime / 480) * 100}%` }}
+                  />
+                  {track.clips.map(clip => (
+                    <div
+                      key={clip.id}
+                      className="absolute top-1 h-6 rounded px-2 flex items-center text-xs font-medium cursor-pointer hover:brightness-110 transition-all"
+                      style={{
+                        left: `${(clip.start / 8) * 100}%`,
+                        width: `${(clip.duration / 8) * 100}%`,
+                        backgroundColor: track.color,
+                        boxShadow: `0 2px 8px ${track.color}40`
+                      }}
+                    >
+                      {clip.name}
+                    </div>
+                  ))}
+                  {track.recording && (
+                    <div
+                      className="absolute top-1 h-6 rounded px-2 flex items-center text-xs font-medium animate-pulse"
+                      style={{
+                        left: '0%',
+                        width: `${(currentTime / 8) * 100}%`,
+                        backgroundColor: track.color,
+                        opacity: 0.7
+                      }}
+                    >
+                      Recording...
+                    </div>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant={track.recording ? "default" : "outline"}
+                  className={`h-7 w-7 p-0 transition-all duration-300 ${track.recording ? 'bg-accent animate-pulse' : 'opacity-0 group-hover:opacity-100'}`}
+                  onClick={() => toggleRecording(track.id)}
+                >
+                  <Icon name="Circle" size={12} />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card className="lg:col-span-2 p-6 bg-card border-border hover:border-primary/50 transition-all duration-300">
@@ -397,6 +543,28 @@ const Index = () => {
               </div>
             </TabsContent>
           </Tabs>
+        </Card>
+
+        <Card className="p-6 bg-card border-border">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Icon name="FolderOpen" size={20} />
+            Recent Projects
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {savedProjects.map(project => (
+              <div
+                key={project.id}
+                className="p-4 rounded-lg bg-muted/30 border border-border hover:border-primary/50 cursor-pointer transition-all duration-300 hover:scale-105"
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <Icon name="Music" size={20} style={{ color: '#0EA5E9' }} />
+                  <span className="text-xs text-muted-foreground">{project.duration}</span>
+                </div>
+                <h3 className="font-medium mb-1">{project.name}</h3>
+                <p className="text-xs text-muted-foreground">{project.date}</p>
+              </div>
+            ))}
+          </div>
         </Card>
       </div>
     </div>
